@@ -18,7 +18,104 @@ export interface ExtractedRecipe {
   sourceUrl: string;
 }
 
+async function fetchInstagramContent(url: string): Promise<string> {
+  // Use Instagram's oEmbed API to get caption text
+  const oembedUrl = `https://graph.facebook.com/v18.0/instagram_oembed?url=${encodeURIComponent(url)}&access_token=IGQVJ...`;
+  
+  // Fallback: try fetching the page directly with mobile user agent
+  const response = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1",
+      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      "Accept-Language": "en-US,en;q=0.9",
+    },
+    signal: AbortSignal.timeout(10000),
+    redirect: "follow",
+  });
+
+  if (!response.ok) {
+    throw new Error("INSTAGRAM_BLOCKED");
+  }
+
+  const html = await response.text();
+  
+  // Try to find meta description or og:description which often has the caption
+  const descMatch = html.match(/property="og:description"\s+content="([^"]+)"/);
+  const titleMatch = html.match(/property="og:title"\s+content="([^"]+)"/);
+  
+  let content = "";
+  if (titleMatch) content += titleMatch[1] + "\n";
+  if (descMatch) content += descMatch[1] + "\n";
+  
+  // Also try to find JSON data embedded in the page
+  const jsonMatch = html.match(/"caption":\s*\{[^}]*"text":\s*"([^"]+)"/);
+  if (jsonMatch) content += jsonMatch[1];
+  
+  if (!content.trim()) {
+    throw new Error("INSTAGRAM_BLOCKED");
+  }
+  
+  return content;
+}
+
+function isInstagramUrl(url: string): boolean {
+  return url.includes("instagram.com") || url.includes("instagr.am");
+}
+
+function isTikTokUrl(url: string): boolean {
+  return url.includes("tiktok.com");
+}
+
+function isYouTubeUrl(url: string): boolean {
+  return url.includes("youtube.com") || url.includes("youtu.be");
+}
+
 export async function extractRecipeFromUrl(url: string): Promise<ExtractedRecipe> {
+  // Handle Instagram separately
+  if (isInstagramUrl(url)) {
+    try {
+      const content = await fetchInstagramContent(url);
+      const recipe = await extractRecipeFromText(content);
+      recipe.sourceUrl = url;
+      return recipe;
+    } catch {
+      throw new Error(
+        "Instagram requires login to access posts. Please copy the recipe text from the Instagram post and paste it using the 'Paste text' option instead."
+      );
+    }
+  }
+
+  // Handle TikTok
+  if (isTikTokUrl(url)) {
+    throw new Error(
+      "TikTok videos can't be scraped directly. Please copy the recipe from the video description or comments and paste it using the 'Paste text' option."
+    );
+  }
+
+  // Handle YouTube - try to get description
+  if (isYouTubeUrl(url)) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        },
+        signal: AbortSignal.timeout(10000),
+      });
+      const html = await response.text();
+      const descMatch = html.match(/property="og:description"\s+content="([^"]+)"/);
+      if (descMatch && descMatch[1].length > 50) {
+        const recipe = await extractRecipeFromText(descMatch[1]);
+        recipe.sourceUrl = url;
+        return recipe;
+      }
+      throw new Error("NO_RECIPE");
+    } catch {
+      throw new Error(
+        "Couldn't find a recipe in this YouTube video description. Please copy the recipe from the description and paste it using the 'Paste text' option."
+      );
+    }
+  }
+
   // First, fetch the page content
   const response = await fetch(url, {
     headers: {

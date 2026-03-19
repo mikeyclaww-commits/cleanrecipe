@@ -38,6 +38,8 @@ export default function Dashboard() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [showExtract, setShowExtract] = useState(false);
   const [url, setUrl] = useState("");
+  const [pasteText, setPasteText] = useState("");
+  const [extractMode, setExtractMode] = useState<"url" | "text">("url");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -48,7 +50,8 @@ export default function Dashboard() {
   const FREE_LIMIT = 15;
 
   const handleExtract = async () => {
-    if (!url.trim()) return;
+    if (extractMode === "url" && !url.trim()) return;
+    if (extractMode === "text" && !pasteText.trim()) return;
     if (recipes.length >= FREE_LIMIT) {
       setError(`Free plan limit reached (${FREE_LIMIT} recipes). Upgrade to Pro for unlimited recipes.`);
       return;
@@ -58,10 +61,14 @@ export default function Dashboard() {
     setError("");
 
     try {
+      const body = extractMode === "url"
+        ? { url: url.trim() }
+        : { text: pasteText.trim() };
+
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -77,6 +84,7 @@ export default function Dashboard() {
 
       setRecipes((prev) => [newRecipe, ...prev]);
       setUrl("");
+      setPasteText("");
       setShowExtract(false);
       setSelectedRecipe(newRecipe);
     } catch {
@@ -216,26 +224,72 @@ export default function Dashboard() {
         {showExtract && (
           <div className="max-w-2xl mx-auto py-12 px-6">
             <h1 className="text-2xl font-bold text-stone-900 mb-2">Add a Recipe</h1>
-            <p className="text-stone-600 mb-8">Paste a URL from any recipe website and our AI will extract it cleanly.</p>
+            <p className="text-stone-600 mb-6">Paste a URL or recipe text and our AI will extract it cleanly.</p>
 
-            <div className="flex gap-2 mb-4">
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleExtract()}
-                placeholder="https://example.com/amazing-recipe"
-                className="flex-1 px-4 py-3 bg-white border border-stone-200 rounded-lg text-stone-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-              />
+            {/* Mode Toggle */}
+            <div className="flex gap-1 mb-6 bg-stone-200 rounded-lg p-1 max-w-xs">
               <button
-                onClick={handleExtract}
-                disabled={loading || !url.trim()}
-                className="bg-orange-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50 flex items-center gap-2"
+                onClick={() => setExtractMode("url")}
+                className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition ${
+                  extractMode === "url" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                }`}
               >
-                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
-                {loading ? "Extracting..." : "Extract"}
+                Paste URL
+              </button>
+              <button
+                onClick={() => setExtractMode("text")}
+                className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition ${
+                  extractMode === "text" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500"
+                }`}
+              >
+                Paste Text
               </button>
             </div>
+
+            {extractMode === "url" ? (
+              <div className="flex gap-2 mb-4">
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleExtract()}
+                  placeholder="https://example.com/amazing-recipe"
+                  className="flex-1 px-4 py-3 bg-white border border-stone-200 rounded-lg text-stone-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
+                />
+                <button
+                  onClick={handleExtract}
+                  disabled={loading || !url.trim()}
+                  className="bg-orange-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
+                  {loading ? "Extracting..." : "Extract"}
+                </button>
+              </div>
+            ) : (
+              <div className="mb-4">
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder="Paste recipe text here — from Instagram captions, TikTok, cookbooks, or anywhere..."
+                  className="w-full px-4 py-3 bg-white border border-stone-200 rounded-lg text-stone-900 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100 resize-none"
+                  rows={8}
+                />
+                <button
+                  onClick={handleExtract}
+                  disabled={loading || !pasteText.trim()}
+                  className="mt-2 bg-orange-600 text-white px-5 py-3 rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50 flex items-center gap-2"
+                >
+                  {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Zap className="h-5 w-5" />}
+                  {loading ? "Extracting..." : "Extract Recipe"}
+                </button>
+              </div>
+            )}
+
+            <p className="text-stone-400 text-sm mb-4">
+              {extractMode === "url"
+                ? "Works with food blogs, AllRecipes, Food Network, and most recipe sites"
+                : "Perfect for Instagram captions, TikTok descriptions, cookbook text, or handwritten recipes"}
+            </p>
 
             {error && (
               <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">

@@ -25,21 +25,28 @@ interface ExtractedRecipe {
 
 export default function Home() {
   const [url, setUrl] = useState("");
+  const [pasteText, setPasteText] = useState("");
+  const [mode, setMode] = useState<"url" | "text">("url");
   const [loading, setLoading] = useState(false);
   const [recipe, setRecipe] = useState<ExtractedRecipe | null>(null);
   const [error, setError] = useState("");
 
   const handleExtract = async () => {
-    if (!url.trim()) return;
+    if (mode === "url" && !url.trim()) return;
+    if (mode === "text" && !pasteText.trim()) return;
     setLoading(true);
     setError("");
     setRecipe(null);
 
     try {
+      const body = mode === "url" 
+        ? { url: url.trim() } 
+        : { text: pasteText.trim() };
+
       const res = await fetch("/api/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -50,7 +57,7 @@ export default function Home() {
         setRecipe(data.recipe);
       }
     } catch {
-      setError("Failed to extract recipe. Please check the URL and try again.");
+      setError("Failed to extract recipe. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -92,35 +99,88 @@ export default function Home() {
 
           {/* The Try-It Input */}
           <div className="max-w-2xl mx-auto">
-            <div className="flex gap-2 bg-white rounded-xl shadow-lg border border-stone-200 p-2">
-              <input
-                type="url"
-                value={url}
-                onChange={(e) => setUrl(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleExtract()}
-                placeholder="Paste a recipe URL — try it free, no signup needed"
-                className="flex-1 px-4 py-3 text-stone-900 placeholder:text-stone-400 bg-transparent outline-none text-lg"
-              />
+            {/* Mode Toggle */}
+            <div className="flex justify-center gap-1 mb-4 bg-stone-200 rounded-lg p-1 max-w-xs mx-auto">
               <button
-                onClick={handleExtract}
-                disabled={loading || !url.trim()}
-                className="bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                onClick={() => setMode("url")}
+                className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition ${
+                  mode === "url" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
+                }`}
               >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    Extracting...
-                  </>
-                ) : (
-                  <>
-                    <Zap className="h-5 w-5" />
-                    Extract Recipe
-                  </>
-                )}
+                Paste URL
+              </button>
+              <button
+                onClick={() => setMode("text")}
+                className={`flex-1 px-4 py-2 rounded-md text-sm font-medium transition ${
+                  mode === "text" ? "bg-white text-stone-900 shadow-sm" : "text-stone-500 hover:text-stone-700"
+                }`}
+              >
+                Paste Text
               </button>
             </div>
+
+            {mode === "url" ? (
+              <div className="flex gap-2 bg-white rounded-xl shadow-lg border border-stone-200 p-2">
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => setUrl(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleExtract()}
+                  placeholder="Paste a recipe URL — try it free, no signup needed"
+                  className="flex-1 px-4 py-3 text-stone-900 placeholder:text-stone-400 bg-transparent outline-none text-lg"
+                />
+                <button
+                  onClick={handleExtract}
+                  disabled={loading || !url.trim()}
+                  className="bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                >
+                  {loading ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Extracting...
+                    </>
+                  ) : (
+                    <>
+                      <Zap className="h-5 w-5" />
+                      Extract Recipe
+                    </>
+                  )}
+                </button>
+              </div>
+            ) : (
+              <div className="bg-white rounded-xl shadow-lg border border-stone-200 p-2">
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  placeholder="Paste recipe text here — from Instagram captions, TikTok descriptions, cookbooks, screenshots, or anywhere else..."
+                  className="w-full px-4 py-3 text-stone-900 placeholder:text-stone-400 bg-transparent outline-none text-base resize-none"
+                  rows={6}
+                />
+                <div className="flex justify-end pt-2 border-t border-stone-100">
+                  <button
+                    onClick={handleExtract}
+                    disabled={loading || !pasteText.trim()}
+                    className="bg-orange-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-orange-700 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Extracting...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="h-5 w-5" />
+                        Extract Recipe
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            )}
             <p className="text-stone-400 text-sm mt-3">
-              Try it: paste a URL from AllRecipes, NYT Cooking, Food Network, or any recipe site
+              {mode === "url" 
+                ? "Try it: paste a URL from any food blog, AllRecipes, NYT Cooking, Food Network, etc."
+                : "Works great with: Instagram captions, TikTok descriptions, text from cookbooks, or any recipe text"}
             </p>
           </div>
 
